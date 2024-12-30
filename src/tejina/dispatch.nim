@@ -166,7 +166,7 @@ macro PATCH*(routeDecl: static[string], body: untyped): untyped =
   if not allRoute.hasKey(HttpPatch):
     allRoute[HttpPatch] = newTable[string, NimNode]()
   allRoute[HttpPatch][routeDecl] = body
-  
+
 macro dispatchAllRoute*(reqVarName: untyped): untyped =
   result = nnkStmtList.newTree()
   for k in allRoute.keys():

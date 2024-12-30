@@ -6,45 +6,6 @@ import std/json
 import std/sets
 import std/tables
 import std/paths
-
-proc newProperty*(): JsonNode = return %*{}
-proc `[]=`*(p: JsonNode, k: string, v: typeof(nil)): void =
-    p[k] = %* v
-proc `[]=`*(p: JsonNode, k: string, v: string): void =
-    p[k] = %* v
-proc `[]=`*(p: JsonNode, k: string, v: int): void =
-    p[k] = %* v
-proc `[]=`*(p: JsonNode, k: string, v: float): void =
-    p[k] = %* v
-proc `[]=`*(p: JsonNode, k: string, v: bool): void =
-    p[k] = %* v
-proc `[]=`*[A](p: JsonNode, k: string, v: seq[A]): void =
-    p[k] = %* v
-proc length*(p: JsonNode): int =
-  if p.kind == JArray: return p.elems.len
-  elif p.kind == JString: return p.str.len
-  else:
-    raise newException(ValueError, "Cannot take length of non-collections")
-proc length*[A](x: A): int = x.len
-proc `toDisplayStr`*(p: JsonNode): string =
-  case p.kind:
-    of JNull: "nil"
-    of JString: p.str
-    of JInt: $p.num
-    of JFloat: $p.fnum
-    of JBool: $p.bval
-    of JArray: "[" & p.elems.mapIt($it).join(", ") & "]"
-    of JObject:
-      var r: seq[string] = @[]
-      for k in p.fields.pairs:
-        r.add(k[0].repr & ": " & $k[1])
-      return "{" & r.join(", ") & "}"
-proc `toDisplayStr`*(x: string): string = x
-proc `toDisplayStr`*(x: int): string = $x
-proc `toDisplayStr`*(x: float): string = $x
-proc `toDisplayStr`*(x: typeof(nil)): string = "nil"
-proc `toDisplayStr`*(x: bool): string = $x
-proc `toDisplayStr`*[A](x: openArray[A]): string = $x
       
 type
   TemplatePieceType* = enum
@@ -296,7 +257,7 @@ proc renderTemplateToAST(s: seq[TemplatePiece], resultVar: NimNode): NimNode =
       of EXPR:
         let v: NimNode = k.exVal.parseExpr
         result.add quote do:
-          `resultVar`.add(`v`.toDisplayStr)
+          `resultVar`.add(`v`)
       of FOR:
         let v: NimNode = newIdentNode(k.forVar)
         let e: NimNode = k.forExpr.parseExpr
@@ -337,27 +298,6 @@ proc renderTemplateToAST(s: seq[TemplatePiece], resultVar: NimNode): NimNode =
       of INCLUDE:
         raise newException(ValueError, "shouldn't happen")
   return result
-
-## Usage:
-##     defineTemplate [varName]: [template-path]
-## This will load the file at `[template-path]` as a template and define a proc
-## of type `proc (prop: JsonNode): string` named `[varName]`. Since `prop` is
-## the only variable defined within the scope, you must pass everything through
-## `prop` and use the format `proc["key"]` to access the values.
-macro defineTemplate*(name: untyped, filename: static[string]): untyped =
-  result = nnkStmtList.newTree()
-  let resolveBase = (name.lineInfoObj.filename.Path).parentDir / filename.Path
-  var trail: seq[string] = @[]
-  let v = resolveBase.string.resolveTemplate(trail)
-  let res = newIdentNode("`")
-  let prop = newIdentNode("prop")
-  let procBody = v.renderTemplateToAST(res)
-  result.add quote do:
-    proc `name`(`prop`: JsonNode): string =
-      var `res`: seq[string] = @[]
-      `procBody`
-      return `res`.join("")
-  # echo filename, " --> ", result.repr
 
 ## Usage:
 ##     expandTemplate([varName], [template-path])
