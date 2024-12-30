@@ -16,6 +16,8 @@ the location of your choice. You can also download this project and use
 ## Quick start
 
 ``` nim
+import tejina/[dispatch, templates]
+
 # Things that you're going to need while handling the requests, e.g. database
 # connections and configs.
 type
