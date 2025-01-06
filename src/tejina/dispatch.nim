@@ -167,6 +167,61 @@ macro PATCH*(routeDecl: static[string], body: untyped): untyped =
     allRoute[HttpPatch] = newTable[string, NimNode]()
   allRoute[HttpPatch][routeDecl] = body
 
+template serveStatic*(req: untyped, routePrefix: static[string], staticFilePrefix: static[string]): untyped =
+  block xx:
+    if not req.url.path.startsWith(routePrefix): break xx
+    let mt = newMimetypes()
+    var requestedPathNoPrefix = req.url.path.substr(routePrefix.len)
+    if requestedPathNoPrefix.len > 0 and requestedPathNoPrefix[0] == '/':
+      requestedPathNoPrefix = "." & requestedPathNoPrefix
+    let p = (staticFilePrefix.Path / requestedPathNoPrefix.Path).absolutePath
+    if not p.fileExists():
+      await req.respond(Http404, "", nil)
+    else:
+      let ext = p.string[p.changeFileExt("").string.len..<p.string.len]
+      let mimetype = mt.getMimetype(ext)
+      let f = openAsync(p.string, fmRead)
+      let fs = await f.readAll()
+      f.close()
+      await req.respond(Http200, fs,
+                        {"Content-Type": mimetype, "Content-Length": $fs.len}.newHttpHeaders())
+
+template serveStaticStreaming*(req: untyped, routePrefix: static[string], staticFilePrefix: static[string], chunkSize: static[int] = 128): untyped =
+  ## The difference between `serveStatic` and this function is that `serveStatic`
+  ## will first read all the content from the requested file and then send it to
+  ## the client (and thus is able to send with a `Content-Length` header field)
+  ## but `serveStaticStreaming` will read from the file and immediately send it
+  ## to the client one chunk at a time (and thus is not able to provide a
+  ## `Content-Length` header because in an HTTP response the header comes before
+  ## the content). This is here in case you need to serve big resource files (e.g.
+  ## videos) this way, since I'm afraid that using `readAll` on large files might
+  ## lead to big RAM usage. Other than that, there is no difference between the
+  ## two macros.
+  block xx:
+    if not req.url.path.startsWith(routePrefix): break xx
+    let mt = newMimetypes()
+    var requestedPathNoPrefix = req.url.path.substr(routePrefix.len)
+    if requestedPathNoPrefix.len > 0 and requestedPathNoPrefix[0] == '/':
+      requestedPathNoPrefix = "." & requestedPathNoPrefix
+    let p = (staticFilePrefix.Path / requestedPathNoPrefix.Path).absolutePath
+    if not p.fileExists():
+      await req.respond(Http404, "", nil)
+    else:
+      let ext = p.string[p.changeFileExt("").string.len..<p.string.len]
+      let mimetype = mt.getMimetype(ext)
+      await req.client.send("HTTP/1.1 200\c\L")
+      await req.client.send("Content-Type: " & mimetype & "\c\L")
+      await req.client.send("Transfer-Encoding: chunked\c\L")
+      await req.client.send("\c\L")
+      let f = openAsync(p.string, fmRead)
+      while true:
+        let b = await f.read(chunkSize)
+        await req.client.send((b.len).toHex)
+        await req.client.send("\c\L")
+        await req.client.send(b)
+        await req.client.send("\c\L")
+        if b.len <= 0: break
+      
 macro dispatchAllRoute*(reqVarName: untyped): untyped =
   result = nnkStmtList.newTree()
   for k in allRoute.keys():
