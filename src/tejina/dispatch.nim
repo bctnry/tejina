@@ -6,6 +6,43 @@ import std/options
 import std/macros
 import std/tables
 
+# Request jump utilities.
+
+template temporarilyHandleWith*(req: Request, target: string) =
+  ## HTTP 307 redirection helper.
+  ## The difference between this and other temporary redirection is that a properly
+  ## implemented client would guarantee the endpoint at that location would handle
+  ## the exact same request - same path, same method, same anything.
+  await req.respond(Http307, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
+  
+template permanentlyHandleWith*(req: Request, target: string) =
+  ## HTTP 308 redirection helper.
+  ## The difference between this and other permanent redirection is that a properly
+  ## implemented client would guarantee the endpoint at that location would handle
+  ## the exact same request - same path, same method, same anything.
+  await req.respond(Http308, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
+
+template permanentlyJumpTo*(req: Request, target: string) =
+  ## HTTP 301 redirection helper.
+  ## The difference between this and `permanentlyHandleWith` is that the target
+  ## route might not receive the same request (e.g. some client would issue a `GET`
+  ## instead of repeating the same `POST` request if an HTTP 301 is received), which
+  ## may not be what you're looking for.
+  await req.respond(Http301, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
+
+template foundAt*(req: Request, target: string) =
+  ## HTTP 302 redirection helper.
+  ## I actually don't know what could justify the differentiation between HTTP 302
+  ## and HTTP 303. I would expect one to use this when handling queries and use
+  ## `seeOther` when handling `PUT` requests.
+  await req.respond(Http302, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
+  
+template seeOther*(req: Request, target: string) =
+  ## HTTP 303 redirection helper.
+  ## The difference between `seeOther` and `foundAt` is that HTTP 303 guarantees that
+  ## a proper client would be issuing a `GET`.
+  await req.respond(Http303, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
+  
 type
   Route* = distinct seq[(bool, string)]
   RouteMatchResult* = distinct StringTableRef
@@ -127,7 +164,7 @@ template dispatch*(x: untyped, args: untyped, req: untyped, body: untyped) =
     let args = x.matchRoute(req.url.path)
     if ((StringTableRef)(args)) == nil: break xx
     body
-
+    
 var allRoute {.compileTime.}: TableRef[string, TableRef[HttpMethod, NimNode]] = newTable[string, TableRef[HttpMethod, NimNode]]()
 
 macro GET*(routeDecl: static[string], body: untyped): untyped =
