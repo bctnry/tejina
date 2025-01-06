@@ -128,45 +128,102 @@ template dispatch*(x: untyped, args: untyped, req: untyped, body: untyped) =
     if ((StringTableRef)(args)) == nil: break xx
     body
 
-var allRoute {.compileTime.}: TableRef[HttpMethod, TableRef[string, NimNode]] = newTable[HttpMethod, TableRef[string, NimNode]]()
+var allRoute {.compileTime.}: TableRef[string, TableRef[HttpMethod, NimNode]] = newTable[string, TableRef[HttpMethod, NimNode]]()
 
 macro GET*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpGet):
-    allRoute[HttpGet] = newTable[string, NimNode]()
-  allRoute[HttpGet][routeDecl] = body
-macro POST*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpPost):
-    allRoute[HttpPost] = newTable[string, NimNode]()
-  allRoute[HttpPost][routeDecl] = body
-macro PUT*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpPost):
-    allRoute[HttpPut] = newTable[string, NimNode]()
-  allRoute[HttpPut][routeDecl] = body
-macro HEAD*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpHead):
-    allRoute[HttpHead] = newTable[string, NimNode]()
-  allRoute[HttpHead][routeDecl] = body
-macro DELETE*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpDelete):
-    allRoute[HttpDelete] = newTable[string, NimNode]()
-  allRoute[HttpDelete][routeDecl] = body
-macro TRACE*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpTrace):
-    allRoute[HttpTrace] = newTable[string, NimNode]()
-  allRoute[HttpTrace][routeDecl] = body
-macro OPTIONS*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpOptions):
-    allRoute[HttpOptions] = newTable[string, NimNode]()
-  allRoute[HttpOptions][routeDecl] = body
-macro CONNECT*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpConnect):
-    allRoute[HttpConnect] = newTable[string, NimNode]()
-  allRoute[HttpConnect][routeDecl] = body
-macro PATCH*(routeDecl: static[string], body: untyped): untyped =
-  if not allRoute.hasKey(HttpPatch):
-    allRoute[HttpPatch] = newTable[string, NimNode]()
-  allRoute[HttpPatch][routeDecl] = body
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpGet): allRoute[routeDecl][HttpGet] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpGet].lineInfoObj
+    raise newException(ValueError, "GET " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
 
+macro POST*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpPost): allRoute[routeDecl][HttpPost] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpPost].lineInfoObj
+    raise newException(ValueError, "POST " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro PUT*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpPut): allRoute[routeDecl][HttpPut] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpPut].lineInfoObj
+    raise newException(ValueError, "PUT " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro HEAD*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpHead): allRoute[routeDecl][HttpHead] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpHead].lineInfoObj
+    raise newException(ValueError, "HEAD " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro DELETE*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpDelete): allRoute[routeDecl][HttpDelete] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpDelete].lineInfoObj
+    raise newException(ValueError, "DELETE " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro TRACE*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpTrace): allRoute[routeDecl][HttpTrace] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpTrace].lineInfoObj
+    raise newException(ValueError, "TRACE " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro OPTIONS*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpOptions): allRoute[routeDecl][HttpOptions] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpOptions].lineInfoObj
+    raise newException(ValueError, "GET " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro CONNECT*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpConnect): allRoute[routeDecl][HttpConnect] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpConnect].lineInfoObj
+    raise newException(ValueError, "GET " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+macro PATCH*(routeDecl: static[string], body: untyped): untyped =
+  if not allRoute.hasKey(routeDecl): allRoute[routeDecl] = newTable[HttpMethod, NimNode]()
+  if not allRoute[routeDecl].hasKey(HttpPatch): allRoute[routeDecl][HttpPatch] = body
+  else:
+    let new = body.lineInfoObj
+    let old = allRoute[routeDecl][HttpPatch].lineInfoObj
+    raise newException(ValueError, "GET " & routeDecl & " is defined again at" & new.filename & "(" & $new.line & "," & $new.column & ") after its previous definition at " & old.filename & "(" & $old.line & "," & $old.column & ")")
+
+
+var fallbackRoute {.compileTime.}: TableRef[string, NimNode] = newTable[string, NimNode]()
+
+macro FALLBACK*(routeDecl: static[string], body: untyped): untyped =
+  ## `FALLBACK` matches remaining HTTP methods on the route `routeDecl` ("remaining", i.e.
+  ## not declared using other Tejina macros like `GET` and `POST`). For routes that does
+  ## not have a `FALLBACK` declaration, Tejina uses a default handler that will report an
+  ## HTTP 501 error; normally this should be enough, but you may be tempted to define your
+  ## own handler. Everything - the special variable `args` and stuff - works the same.
+  if fallbackRoute.hasKey(routeDecl):
+    let filename = body.lineInfoObj.filename
+    let line = body.lineInfoObj.line
+    let col = body.lineInfoObj.column
+    let filename2 = fallbackRoute[routeDecl].lineInfoObj.filename
+    let line2 = fallbackRoute[routeDecl].lineInfoObj.line
+    let col2 = fallbackRoute[routeDecl].lineInfoObj.column
+    raise newException(
+      ValueError,
+      filename & "(" & $line & "," & $col & "): Fallback route for " & routeDecl.repr & " already defined at " & filename2 & "(" & $line2 & "," & $col2 & ")"
+    )
+  fallbackRoute[routeDecl] = body
+  
 template serveStatic*(req: untyped, routePrefix: static[string], staticFilePrefix: static[string]): untyped =
   block xx:
     if not req.url.path.startsWith(routePrefix): break xx
@@ -225,21 +282,27 @@ template serveStaticStreaming*(req: untyped, routePrefix: static[string], static
 macro dispatchAllRoute*(reqVarName: untyped): untyped =
   result = nnkStmtList.newTree()
   for k in allRoute.keys():
-    let v = newStrLitNode($k)
+    let argvar = newIdentNode("args")
+    let s = genSym(nskLabel)
+    let parsedRoute = k.parseRoute.Route
     var routeBody = nnkStmtList.newTree()
     for kk in allRoute[k].keys():
-      let argvar = newIdentNode("args")
+      let v = newStrLitNode($kk)
       let s = genSym(nskLabel)
       let body = allRoute[k][kk]
-      let parsedRoute = kk.parseRoute.Route
       routeBody.add quote do:
         block `s`:
-          let `argvar` = `parsedRoute`.matchRoute(`reqVarName`.url.path)
-          if ((StringTableRef)(`argvar`)) == nil: break `s`
+          if $(`reqVarName`.reqMethod) != `v`: break `s`
           `body`
-    let s = genSym(nskLabel)
+    if not fallbackRoute.hasKey(k):
+      routeBody.add quote do:
+        await `reqVarName`.respond(Http501, "", nil)
+    else:
+      routeBody.add(fallbackRoute[k])
     result.add quote do:
       block `s`:
-        if $(`reqVarName`.reqMethod) != `v`: break `s`
+        let `argvar` = `parsedRoute`.matchRoute(`reqVarName`.url.path)
+        if ((StringTableRef)(`argvar`)) == nil: break `s`
         `routeBody`
+
 
