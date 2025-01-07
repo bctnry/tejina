@@ -285,7 +285,7 @@ proc renderTemplateToAST(s: seq[TemplatePiece], resultVar: NimNode): NimNode =
                 `lastIfBody`
         i -= 1
         while i >= 0:
-          var branchCond= k.ifClause[i][0].parseExpr
+          var branchCond = k.ifClause[i][0].parseExpr
           var branchBody = k.ifClause[i][1].renderTemplateToAST(resultVar)
           lastRes =
             quote do:
@@ -319,7 +319,7 @@ macro expandTemplate*(resultVarName: untyped, filename: static[string]): untyped
   let resolveBase = (resultVarName.lineInfoObj.filename.Path).parentDir / filename.Path
   var trail: seq[string] = @[]
   let v = resolveBase.string.resolveTemplate(trail)
-  let seqres = newIdentNode("`")
+  let seqres = genSym(nskVar)
   let procBody = v.renderTemplateToAST(seqres)
   result.add quote do:
     var `resultVarName`: string

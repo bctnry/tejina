@@ -44,11 +44,15 @@ template seeOther*(req: Request, target: string) =
   await req.respond(Http303, "", {"Content-Length": "0", "Location": target}.newHttpHeaders())
   
 type
-  Route* = distinct seq[(bool, string)]
+  Route* = distinct seq[(int, string)]
   RouteMatchResult* = distinct StringTableRef
 
+const STRING: int = 0
+const VAR: int = 1
+const REST: int = 2
+
 proc parseRoute*(x: string): Route =
-  var res: seq[(bool, string)] = @[]
+  var res: seq[(int, string)] = @[]
   var i = 0
   let lenx = x.len
   var currentPiece: string = ""
@@ -57,7 +61,7 @@ proc parseRoute*(x: string): Route =
     if inPiece:
       case x[i]:
         of '}':
-          res.add((true, currentPiece))
+          res.add((VAR, currentPiece))
           currentPiece = ""
           inPiece = false
         of '@':
@@ -70,19 +74,33 @@ proc parseRoute*(x: string): Route =
       i += 1
     else:
       case x[i]:
+        of '*':
+          if i+1 < lenx and x[i+1] == '*':
+            if i+2 < lenx:
+              raise newException(ValueError, "Route syntax error: \"**\" can only occur at the very end.")
+            res.add((STRING, currentPiece))
+            currentPiece = ""
+            res.add((REST, ""))
+            i += 2
+          else:
+            currentPiece.add(x[i])
         of '{':
-          if currentPiece.len > 0: res.add((false, currentPiece))
+          if currentPiece.len > 0: res.add((STRING, currentPiece))
           currentPiece = ""
           inPiece = true
+
         else:
           currentPiece.add(x[i])
+          
       i += 1
   if currentPiece.len > 0:
-    if not inPiece: res.add((false, currentPiece))
-    else: res.add((false, "{" & currentPiece))
+    if not inPiece: res.add((STRING, currentPiece))
+    else: res.add((STRING, "{" & currentPiece))
   return res.Route
 
-proc matchRoute*(r: openArray[(bool, string)], x: string): RouteMatchResult =
+proc strVal(x: (int, string)): string = x[1]
+proc kind(x: (int, string)): int = x[0]
+proc matchRoute*(r: openArray[(int, string)], x: string): RouteMatchResult =
   ## `x` requires to be the "path" part of the URL of an HTTP request, i.e.
   ## without the part that starts with the question mark `?`.
   ## This procedure performs *greedy* matching, i.e. when two variables are
@@ -95,34 +113,48 @@ proc matchRoute*(r: openArray[(bool, string)], x: string): RouteMatchResult =
   let lenr = r.len
   var stri = 0
   while i < lenr:
-    let k = r[i]
-    if not k[0]:
-      let lenk = k[1].len
-      var ki = 0
-      while stri + ki < lenx and ki < lenk and x[stri+ki] == k[1][ki]: ki += 1
-      if ki < lenk: return nil.RouteMatchResult
-      stri = stri + ki
-      i += 1
-    else:
-      var si = stri
-      while si < lenx and x[si] != '/': si += 1
-      if i+1 < lenr and not r[i+1][0]:
-        var pi = 0
-        while pi < r[i+1][1].len and r[i+1][1][pi] != '/': pi += 1
-        let p = r[i+1][1].substr(0, pi)
-        let zi = x.find(p, start=stri, last=si)
-        if zi == -1: return nil.RouteMatchResult
-        res[r[i][1]] = x.substr(stri, zi-1)
-        stri = zi
+    let routePiece = r[i]
+    case routePiece[0]:
+      of STRING:
+        let lenk = routePiece.strVal.len
+        var ki = 0
+        while stri + ki < lenx and ki < lenk and x[stri+ki] == routePiece.strVal[ki]: ki += 1
+        if ki < lenk: return nil.RouteMatchResult
+        stri = stri + ki
         i += 1
+      of VAR:
+        var si = stri
+        # NOTE: the match range of route var does not span over slashes;
+        # this is used to determine the hard limit of a VAR match.
+        while si < lenx and x[si] != '/': si += 1
+        # this is to handle cases like "/foo{var}bar" - it should match paths
+        # like "/fooxyzbar" with {"var": "xyz"}; this requires us to check for
+        # "bar". since STRING pieces does not necessarily end at a slash, we
+        # need to check for slash and use its position as a hard limit for
+        # the string we're looking for as well.
+        if i+1 < lenr and r[i+1].kind == STRING:
+          var pi = 0
+          while pi < r[i+1].strVal.len and r[i+1].strVal[pi] != '/': pi += 1
+          let p = r[i+1].strVal.substr(0, pi)
+          let zi = x.find(p, start=stri, last=si)
+          if zi == -1: return nil.RouteMatchResult
+          res[routePiece.strVal] = x.substr(stri, zi-1)
+          stri = zi
+          i += 1
+        else:
+          res[routePiece.strVal] = x.substr(stri, si-1)
+          stri = si
+          i += 1
+      of REST:
+        res["_rest"] = x.substr(stri)
+        stri = lenx
+        break
       else:
-        res[r[i][1]] = x.substr(stri, si-1)
-        stri = si
-        i += 1
+        raise newException(ValueError, "shouldn't happen")
   if stri < lenx: return nil.RouteMatchResult
   return res.RouteMatchResult
 proc matchRoute*(rx: Route, x: string): RouteMatchResult =
-  return ((seq[(bool, string)])(rx)).matchRoute(x)
+  return ((seq[(int, string)])(rx)).matchRoute(x)
 
 proc isMatchResultFailure*(x: RouteMatchResult): bool =
   return x.StringTableRef == nil
@@ -135,7 +167,7 @@ proc `$`*(x: RouteMatchResult): string =
   else: return "Success(" & $(x.StringTableRef) & ")"
         
 proc `$`*(x: Route): string =
-  let r = seq[(bool, string)](x)
+  let r = seq[(int, string)](x)
   return $r
 
 proc `[]`*(x: RouteMatchResult, k: string): string =
@@ -266,7 +298,8 @@ template serveStatic*(req: untyped, routePrefix: static[string], staticFilePrefi
     if not req.url.path.startsWith(routePrefix): break xx
     let mt = newMimetypes()
     var requestedPathNoPrefix = req.url.path.substr(routePrefix.len)
-    if requestedPathNoPrefix.len > 0 and requestedPathNoPrefix[0] == '/':
+    if requestedPathNoPrefix.len > 0:
+      if requestedPathNoPrefix[0] != '/': break xx
       requestedPathNoPrefix = "." & requestedPathNoPrefix
     let p = (staticFilePrefix.Path / requestedPathNoPrefix.Path).absolutePath
     if not p.fileExists():
@@ -295,7 +328,8 @@ template serveStaticStreaming*(req: untyped, routePrefix: static[string], static
     if not req.url.path.startsWith(routePrefix): break xx
     let mt = newMimetypes()
     var requestedPathNoPrefix = req.url.path.substr(routePrefix.len)
-    if requestedPathNoPrefix.len > 0 and requestedPathNoPrefix[0] == '/':
+    if requestedPathNoPrefix.len > 0:
+      if requestedPathNoPrefix[0] != '/': break xx
       requestedPathNoPrefix = "." & requestedPathNoPrefix
     let p = (staticFilePrefix.Path / requestedPathNoPrefix.Path).absolutePath
     if not p.fileExists():
@@ -317,6 +351,7 @@ template serveStaticStreaming*(req: untyped, routePrefix: static[string], static
         if b.len <= 0: break
       
 macro dispatchAllRoute*(reqVarName: untyped): untyped =
+  ## Generate the code for dispatching on request `reqVarName`.
   result = nnkStmtList.newTree()
   for k in allRoute.keys():
     let argvar = newIdentNode("args")
