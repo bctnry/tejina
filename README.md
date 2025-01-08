@@ -64,31 +64,31 @@ proc serveHTTP*() {.async.} =
   # with macros.
   proc cb(req: Request) {.async.} =
     # As explained above, all declared routes can use the value of `context`
-	# through the id `ctx`.
+    # through the id `ctx`.
     await (proc (req: Request, ctx: Context) {.async.} =
-		     # By doing this, all paths that start with "/static" would be
-			 # handled by Tejina's static directory handler, which replaces
-			 # "/static" with "./static-assets". Both of these arguments can
-			 # be freely customized. But please note that if you choose to
-			 # have a relative path for the second argument, that relative
-			 # path would be resolved using the current working directory
-			 # as the base (so if your CWD is "/var/www/html/some-domain"
-			 # this would become "/var/www/html/some-domain/static-assets").
-			 # It's recommended to use an absolute path here if you need
-			 # to make sure it would truly resolve at the place where you want.
-			 # This would handle paths like "/static" (resolving to
-			 # "./static-assets"), "/static/" (resolving to "./static-assets/"),
-			 # "/static/*" (resolving to "./static-assets/*") but not
-			 # "/static*" (e.g. "/staticblah").
-	         req.serveStatic("/static", "./static-assets")
-			 
-		     # Use `dispatchAllRoute(req)` to expand all the route definitions
-			 # so far into statements that do the dispatch for you which you
-			 # would have to write manually originally.
+             # By doing this, all paths that start with "/static" would be
+             # handled by Tejina's static directory handler, which replaces
+             # "/static" with "./static-assets". Both of these arguments can
+             # be freely customized. But please note that if you choose to
+             # have a relative path for the second argument, that relative
+             # path would be resolved using the current working directory
+             # as the base (so if your CWD is "/var/www/html/some-domain"
+             # this would become "/var/www/html/some-domain/static-assets").
+             # It's recommended to use an absolute path here if you need
+             # to make sure it would truly resolve at the place where you want.
+             # This would handle paths like "/static" (resolving to
+             # "./static-assets"), "/static/" (resolving to "./static-assets/"),
+             # "/static/*" (resolving to "./static-assets/*") but not
+             # "/static*" (e.g. "/staticblah").
+             req.serveStatic("/static", "./static-assets")
+             
+             # Use `dispatchAllRoute(req)` to expand all the route definitions
+             # so far into statements that do the dispatch for you which you
+             # would have to write manually originally.
              dispatchAllRoute(req)
-			 
-			 # It's recommended to have this as a "catch-all".
-			 req.respond(Http404, "", nil))(req, context)
+             
+             # It's recommended to have this as a "catch-all".
+             req.respond(Http404, "", nil))(req, context)
 
   server.listen(9000.Port)
   echo server.getPort().uint16

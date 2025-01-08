@@ -1,8 +1,8 @@
 # Package
 
-version       = "0.1.1"
+version       = "0.1.2"
 author        = "Sebastian Zack Tin Lahm"
-description   = "A new awesome nimble package"
+description   = "Minimal web framework for Nim"
 license       = "MIT"
 srcDir        = "src"
 
